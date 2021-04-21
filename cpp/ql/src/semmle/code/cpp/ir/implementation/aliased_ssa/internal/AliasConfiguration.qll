@@ -129,8 +129,4 @@ class DynamicAllocation extends Allocation, TDynamicAllocation {
   final override predicate alwaysEscapes() { none() }
 }
 
-class StageEscapeConfiguration extends string {
-  StageEscapeConfiguration() { this = "StageEscapeConfiguration (aliased_ssa)" }
-
-  predicate useSoundEscapeAnalysis() { none() }
-}
+predicate phaseNeedsSoundEscapeAnalysis() { none() }
