@@ -269,7 +269,8 @@ predicate allocationEscapes(Configuration::Allocation allocation) {
     config.useSoundEscapeAnalysis() and resultEscapesNonReturn(allocation.getABaseInstruction())
   )
   or
-  Configuration::phaseNeedsSoundEscapeAnalysis() and resultEscapesNonReturn(allocation.getABaseInstruction())
+  Configuration::phaseNeedsSoundEscapeAnalysis() and
+  resultEscapesNonReturn(allocation.getABaseInstruction())
 }
 
 /**
