@@ -30,13 +30,16 @@ module NosqlInjection {
    */
   abstract class Sanitizer extends DataFlow::Node { }
 
-  /** A source of remote user input, considered as a flow source for NoSQL injection. */
-  class RemoteFlowSourceAsSource extends Source {
-    RemoteFlowSourceAsSource() { this instanceof RemoteFlowSource }
-  }
+  /**
+   * DEPRECATED: Use `ActiveThreatModelSource` from Concepts instead!
+   */
+  deprecated class RemoteFlowSourceAsSource = ActiveThreatModelSourceAsSource;
 
-  /** An expression interpreted as a NoSQL query, viewed as a sink. */
-  class NosqlQuerySink extends Sink, DataFlow::ValueNode {
-    override NoSQL::Query astNode;
-  }
+  /**
+   * An active threat-model source, considered as a flow source.
+   */
+  private class ActiveThreatModelSourceAsSource extends Source, ActiveThreatModelSource { }
+
+  /** An expression interpreted as a NoSql query, viewed as a sink. */
+  class NosqlQuerySink extends Sink instanceof NoSql::Query { }
 }

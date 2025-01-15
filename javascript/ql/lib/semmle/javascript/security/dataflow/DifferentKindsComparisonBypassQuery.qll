@@ -9,7 +9,6 @@
  */
 
 import javascript
-import semmle.javascript.security.dataflow.RemoteFlowSources
 import DifferentKindsComparisonBypassCustomizations::DifferentKindsComparisonBypass
 
 /**
@@ -37,8 +36,8 @@ class DifferentKindsComparison extends Comparison {
 
   DifferentKindsComparison() {
     exists(Configuration cfg |
-      cfg.hasFlow(lSource, DataFlow::valueNode(getLeftOperand())) and
-      cfg.hasFlow(rSource, DataFlow::valueNode(getRightOperand())) and
+      cfg.hasFlow(lSource, DataFlow::valueNode(this.getLeftOperand())) and
+      cfg.hasFlow(rSource, DataFlow::valueNode(this.getRightOperand())) and
       lSource.isSuspiciousToCompareWith(rSource)
     )
   }

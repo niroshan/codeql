@@ -10,118 +10,6 @@ private import semmle.javascript.dataflow.internal.PreCallGraphStep
 private import DataFlow::PseudoProperties
 
 /**
- * DEPRECATED. Exists only to support other deprecated elements.
- *
- * Type-tracking now automatically determines the set of pseudo-properties to include
- * ased on which properties are contributed by `SharedTaintStep`s.
- */
-deprecated private class PseudoProperty extends string {
-  PseudoProperty() {
-    this = [arrayLikeElement(), "1"] or // the "1" is required for the `ForOfStep`.
-    this =
-      [
-        mapValue(any(DataFlow::CallNode c | c.getCalleeName() = "set").getArgument(0)),
-        mapValueAll()
-      ]
-  }
-}
-
-/**
- * DEPRECATED. Use `SharedFlowStep` or `SharedTaintTrackingStep` instead.
- */
-abstract deprecated class CollectionFlowStep extends DataFlow::AdditionalFlowStep {
-  final override predicate step(DataFlow::Node pred, DataFlow::Node succ) { none() }
-
-  final override predicate step(
-    DataFlow::Node p, DataFlow::Node s, DataFlow::FlowLabel pl, DataFlow::FlowLabel sl
-  ) {
-    none()
-  }
-
-  /**
-   * Holds if the property `prop` of the object `pred` should be loaded into `succ`.
-   */
-  predicate load(DataFlow::Node pred, DataFlow::Node succ, PseudoProperty prop) { none() }
-
-  final override predicate loadStep(DataFlow::Node pred, DataFlow::Node succ, string prop) {
-    this.load(pred, succ, prop)
-  }
-
-  /**
-   * Holds if `pred` should be stored in the object `succ` under the property `prop`.
-   */
-  predicate store(DataFlow::Node pred, DataFlow::SourceNode succ, PseudoProperty prop) { none() }
-
-  final override predicate storeStep(DataFlow::Node pred, DataFlow::SourceNode succ, string prop) {
-    this.store(pred, succ, prop)
-  }
-
-  /**
-   * Holds if the property `prop` should be copied from the object `pred` to the object `succ`.
-   */
-  predicate loadStore(DataFlow::Node pred, DataFlow::Node succ, PseudoProperty prop) { none() }
-
-  final override predicate loadStoreStep(DataFlow::Node pred, DataFlow::Node succ, string prop) {
-    this.loadStore(pred, succ, prop, prop)
-  }
-
-  /**
-   * Holds if the property `loadProp` should be copied from the object `pred` to the property `storeProp` of object `succ`.
-   */
-  predicate loadStore(
-    DataFlow::Node pred, DataFlow::Node succ, PseudoProperty loadProp, PseudoProperty storeProp
-  ) {
-    none()
-  }
-
-  final override predicate loadStoreStep(
-    DataFlow::Node pred, DataFlow::Node succ, string loadProp, string storeProp
-  ) {
-    this.loadStore(pred, succ, loadProp, storeProp)
-  }
-}
-
-/**
- * DEPRECATED. These steps are now included in the default type tracking steps,
- * in most cases one can simply use those instead.
- */
-deprecated module CollectionsTypeTracking {
-  /**
-   * Gets the result from a single step through a collection, from `pred` to `result` summarized by `summary`.
-   */
-  pragma[inline]
-  DataFlow::SourceNode collectionStep(DataFlow::Node pred, StepSummary summary) {
-    exists(PseudoProperty field |
-      summary = LoadStep(field) and
-      DataFlow::SharedTypeTrackingStep::loadStep(pred, result, field) and
-      not field = mapValueUnknownKey() // prune unknown reads in type-tracking
-      or
-      summary = StoreStep(field) and
-      DataFlow::SharedTypeTrackingStep::storeStep(pred, result, field)
-      or
-      summary = CopyStep(field) and
-      DataFlow::SharedTypeTrackingStep::loadStoreStep(pred, result, field)
-      or
-      exists(PseudoProperty toField | summary = LoadStoreStep(field, toField) |
-        DataFlow::SharedTypeTrackingStep::loadStoreStep(pred, result, field, toField)
-      )
-    )
-  }
-
-  /**
-   * Gets the result from a single step through a collection, from `pred` with tracker `t2` to `result` with tracker `t`.
-   */
-  pragma[inline]
-  DataFlow::SourceNode collectionStep(
-    DataFlow::SourceNode pred, DataFlow::TypeTracker t, DataFlow::TypeTracker t2
-  ) {
-    exists(DataFlow::Node mid, StepSummary summary | pred.flowsTo(mid) and t = t2.append(summary) |
-      result = collectionStep(mid, summary)
-    )
-  }
-}
-
-/**
  * A module for data-flow steps related standard library collection implementations.
  */
 private module CollectionDataFlow {
@@ -156,7 +44,7 @@ private module CollectionDataFlow {
   }
 
   /**
-   * A step for modelling `for of` iteration on arrays, maps, sets, and iterators.
+   * A step for modeling `for of` iteration on arrays, maps, sets, and iterators.
    *
    * For sets and iterators the l-value are the elements of the set/iterator.
    * For maps the l-value is a tuple containing a key and a value.
@@ -260,6 +148,34 @@ private module CollectionDataFlow {
         succ = call and
         fromProp = setElement() and
         toProp = iteratorElement()
+      )
+    }
+  }
+
+  /**
+   * A step for a call to `groupBy` on an iterable object.
+   */
+  private class GroupByTaintStep extends TaintTracking::SharedTaintStep {
+    override predicate heapStep(DataFlow::Node pred, DataFlow::Node succ) {
+      exists(DataFlow::MethodCallNode call |
+        call = DataFlow::globalVarRef(["Map", "Object"]).getAMemberCall("groupBy") and
+        pred = call.getArgument(0) and
+        (succ = call.getCallback(1).getParameter(0) or succ = call)
+      )
+    }
+  }
+
+  /**
+   * A step for handling data flow and taint tracking for the groupBy method on iterable objects.
+   * Ensures propagation of taint and data flow through the groupBy operation.
+   */
+  private class GroupByDataFlowStep extends PreCallGraphStep {
+    override predicate storeStep(DataFlow::Node pred, DataFlow::SourceNode succ, string prop) {
+      exists(DataFlow::MethodCallNode call |
+        call = DataFlow::globalVarRef("Map").getAMemberCall("groupBy") and
+        pred = call.getArgument(0) and
+        succ = call and
+        prop = mapValueUnknownKey()
       )
     }
   }

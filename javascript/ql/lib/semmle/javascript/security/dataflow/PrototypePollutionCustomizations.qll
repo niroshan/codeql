@@ -6,12 +6,11 @@
 
 import javascript
 import semmle.javascript.security.TaintedObject
-import semmle.javascript.dependencies.Dependencies
 import semmle.javascript.dependencies.SemVer
 
 module PrototypePollution {
   /**
-   * Label for wrappers around tainted objects, that is, objects that are
+   * A label for wrappers around tainted objects, that is, objects that are
    * not completely user-controlled, but contain a user-controlled object.
    *
    * For example, `options` below is a tainted wrapper, but is not itself
@@ -54,11 +53,6 @@ module PrototypePollution {
     abstract DataFlow::FlowLabel getAFlowLabel();
 
     /**
-     * DEPRECATED. Override `dependencyInfo` instead.
-     */
-    deprecated Dependency getDependency() { none() }
-
-    /**
      * Holds if `moduleName` is the name of the module that defines this sink,
      * and `location` is the declaration of that dependency.
      *
@@ -73,37 +67,34 @@ module PrototypePollution {
    * Note that values from this type of source will need to flow through a `JSON.parse` call
    * in order to be flagged for prototype pollution.
    */
-  private class RemoteFlowAsSource extends Source {
-    RemoteFlowAsSource() { this instanceof RemoteFlowSource }
-
+  private class RemoteFlowAsSource extends Source instanceof RemoteFlowSource {
     override DataFlow::FlowLabel getAFlowLabel() { result.isTaint() }
   }
 
   /**
    * A source of user-controlled objects.
    */
-  private class TaintedObjectSource extends Source {
-    TaintedObjectSource() { this instanceof TaintedObject::Source }
-
+  private class TaintedObjectSource extends Source instanceof TaintedObject::Source {
     override DataFlow::FlowLabel getAFlowLabel() { result = TaintedObject::label() }
   }
 
   class DeepExtendSink extends Sink {
-    ExtendCall call;
     string moduleName;
     Locatable location;
 
     DeepExtendSink() {
-      this = call.getASourceOperand() and
-      (
-        exists(Dependency dep |
-          isVulnerableVersionOfDeepExtendCall(call, dep) and
-          dep = location and
-          dep.info(moduleName, _)
+      exists(ExtendCall call |
+        this = call.getASourceOperand() and
+        (
+          exists(Dependency dep |
+            isVulnerableVersionOfDeepExtendCall(call, dep) and
+            dep = location and
+            dep.info(moduleName, _)
+          )
+          or
+          isVulnerableDeepExtendCallAllVersions(call, moduleName) and
+          location = call.asExpr()
         )
-        or
-        isVulnerableDeepExtendCallAllVersions(call, moduleName) and
-        location = call.asExpr()
       )
     }
 
@@ -118,11 +109,6 @@ module PrototypePollution {
       location = loc
     }
   }
-
-  /**
-   * DEPRECATED. Use `isVulnerableVersionOfDeepExtendCall` or `isVulnerableDeepExtendCallAllVersions` instead.
-   */
-  deprecated predicate isVulnerableDeepExtendCall = isVulnerableVersionOfDeepExtendCall/2;
 
   /**
    * Holds if `call` is vulnerable to prototype pollution because the callee is defined by `dep`.
@@ -179,18 +165,14 @@ module PrototypePollution {
       call = DataFlow::moduleImport(id).getACall() or
       call = DataFlow::moduleImport(id).getAMemberCall(_)
     ) and
-    (
-      id = "deep"
-      or
-      id = "extend2"
-      or
-      id = "js-extend"
-      or
-      id = "smart-extend"
-    )
+    id = ["deep", "extend2", "js-extend", "smart-extend"]
     or
     call.isDeep() and
     call = AngularJS::angular().getAMemberCall("merge") and
     id = "angular"
+    or
+    call.isDeep() and
+    call = Webix::webix().getMember(["extend", "copy"]).getACall() and
+    id = "webix"
   }
 }

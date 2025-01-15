@@ -5,7 +5,7 @@
  *              command-line injection vulnerabilities.
  * @kind path-problem
  * @problem.severity warning
- * @security-severity 9.8
+ * @security-severity 6.3
  * @precision medium
  * @id js/indirect-command-line-injection
  * @tags correctness
@@ -25,4 +25,4 @@ where
   then cfg.isSinkWithHighlight(sink.getNode(), highlight)
   else highlight = sink.getNode()
 select highlight, source, sink, "This command depends on an unsanitized $@.", source.getNode(),
-  "command-line argument"
+  source.getNode().(Source).describe()

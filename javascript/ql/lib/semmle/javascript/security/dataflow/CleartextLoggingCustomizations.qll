@@ -36,9 +36,12 @@ module CleartextLogging {
    */
   class MaskingReplacer extends Barrier, StringReplaceCall {
     MaskingReplacer() {
-      this.isGlobal() and
+      this.maybeGlobal() and
       exists(this.getRawReplacement().getStringValue()) and
-      any(RegExpDot term).getLiteral() = getRegExp().asExpr()
+      exists(DataFlow::RegExpCreationNode regexpObj |
+        this.(StringReplaceCall).getRegExp() = regexpObj and
+        regexpObj.getRoot() = any(RegExpDot term).getRootTerm()
+      )
     }
   }
 
@@ -77,7 +80,7 @@ module CleartextLogging {
    */
   private class NonObject extends NonCleartextPassword {
     NonObject() {
-      forall(AbstractValue v | v = analyze().getAValue() | not v.getType() = TTObject())
+      forall(AbstractValue v | v = this.analyze().getAValue() | not v.getType() = TTObject())
     }
   }
 
@@ -94,7 +97,7 @@ module CleartextLogging {
    * A call that might obfuscate a password, for example through hashing.
    */
   private class ObfuscatorCall extends Barrier, DataFlow::InvokeNode {
-    ObfuscatorCall() { getCalleeName().regexpMatch(notSensitiveRegexp()) }
+    ObfuscatorCall() { this.getCalleeName().regexpMatch(notSensitiveRegexp()) }
   }
 
   /**
@@ -156,7 +159,7 @@ module CleartextLogging {
     string name;
 
     CallPasswordSource() {
-      name = getCalleeName() and
+      name = this.getCalleeName() and
       name.regexpMatch("(?is)getPassword")
     }
 
@@ -175,10 +178,22 @@ module CleartextLogging {
   }
 
   /**
+   * DEPRECATED. Use `Barrier` instead, sanitized have been replaced by sanitized nodes.
+   *
    * Holds if the edge `pred` -> `succ` should be sanitized for clear-text logging of sensitive information.
    */
-  predicate isSanitizerEdge(DataFlow::Node pred, DataFlow::Node succ) {
+  deprecated predicate isSanitizerEdge(DataFlow::Node pred, DataFlow::Node succ) {
     succ.(DataFlow::PropRead).getBase() = pred
+  }
+
+  private class PropReadAsBarrier extends Barrier {
+    PropReadAsBarrier() {
+      this = any(DataFlow::PropRead read).getBase() and
+      // the 'foo' in 'foo.bar()' may have flow, we only want to suppress plain property reads
+      not this = any(DataFlow::MethodCallNode call).getReceiver() and
+      // do not block custom taint steps from this node
+      not isAdditionalTaintStep(this, _)
+    }
   }
 
   /**

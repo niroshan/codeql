@@ -47,15 +47,15 @@ module InsecureDownload {
     /**
      * A flow-label for file URLs that are both sensitive and downloaded over an insecure connection.
      */
-    class SensitiveInsecureURL extends DataFlow::FlowLabel {
-      SensitiveInsecureURL() { this = "sensitiveInsecure" }
+    class SensitiveInsecureUrl extends DataFlow::FlowLabel {
+      SensitiveInsecureUrl() { this = "sensitiveInsecure" }
     }
 
     /**
      * A flow-label for a URL that is downloaded over an insecure connection.
      */
-    class InsecureURL extends DataFlow::FlowLabel {
-      InsecureURL() { this = "insecure" }
+    class InsecureUrl extends DataFlow::FlowLabel {
+      InsecureUrl() { this = "insecure" }
     }
   }
 
@@ -72,10 +72,10 @@ module InsecureDownload {
     }
 
     override DataFlow::FlowLabel getALabel() {
-      result instanceof Label::InsecureURL
+      result instanceof Label::InsecureUrl
       or
       hasUnsafeExtension(str) and
-      result instanceof Label::SensitiveInsecureURL
+      result instanceof Label::SensitiveInsecureUrl
     }
   }
 
@@ -106,18 +106,18 @@ module InsecureDownload {
    * A url downloaded by a client-request, seen as a sink for download of
    * sensitive file through insecure connection.
    */
-  class ClientRequestURL extends Sink {
+  class ClientRequestUrl extends Sink {
     ClientRequest request;
 
-    ClientRequestURL() { this = request.getUrl() }
+    ClientRequestUrl() { this = request.getUrl() }
 
     override DataFlow::Node getDownloadCall() { result = request }
 
     override DataFlow::FlowLabel getALabel() {
-      result instanceof Label::SensitiveInsecureURL
+      result instanceof Label::SensitiveInsecureUrl
       or
       hasUnsafeExtension(request.getASavePath().getStringValue()) and
-      result instanceof Label::InsecureURL
+      result instanceof Label::InsecureUrl
     }
   }
 
@@ -136,15 +136,16 @@ module InsecureDownload {
    */
   class FileWriteSink extends Sink {
     ClientRequest request;
-    FileSystemWriteAccess write;
 
     FileWriteSink() {
-      this = request.getUrl() and
-      clientRequestResponse(DataFlow::TypeTracker::end(), request).flowsTo(write.getADataNode()) and
-      hasUnsafeExtension(write.getAPathArgument().getStringValue())
+      exists(FileSystemWriteAccess write |
+        this = request.getUrl() and
+        clientRequestResponse(DataFlow::TypeTracker::end(), request).flowsTo(write.getADataNode()) and
+        hasUnsafeExtension(write.getAPathArgument().getStringValue())
+      )
     }
 
-    override DataFlow::FlowLabel getALabel() { result instanceof Label::InsecureURL }
+    override DataFlow::FlowLabel getALabel() { result instanceof Label::InsecureUrl }
 
     override DataFlow::Node getDownloadCall() { result = request }
   }

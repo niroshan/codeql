@@ -8,7 +8,7 @@
  */
 
 import javascript
-import ExternalAPIUsedWithUntrustedDataCustomizations::ExternalAPIUsedWithUntrustedData
+import ExternalAPIUsedWithUntrustedDataCustomizations::ExternalApiUsedWithUntrustedData
 
 /** Flow label for objects from which a tainted value is reachable. */
 private class ObjectWrapperFlowLabel extends DataFlow::FlowLabel {
@@ -46,26 +46,20 @@ class Configuration extends TaintTracking::Configuration {
     )
   }
 
-  override predicate isSanitizerEdge(DataFlow::Node pred, DataFlow::Node succ) {
+  override predicate isSanitizerIn(DataFlow::Node node) {
     // Block flow from the location to its properties, as the relevant properties (hash and search) are taint sources of their own.
     // The location source is only used for propagating through API calls like `new URL(location)` and into external APIs where
     // the whole location object escapes.
-    exists(DataFlow::PropRead read |
-      read = DOM::locationRef().getAPropertyRead() and
-      pred = read.getBase() and
-      succ = read
-    )
+    node = DOM::locationRef().getAPropertyRead()
   }
 }
 
 /** A node representing data being passed to an external API. */
-class ExternalAPIDataNode extends DataFlow::Node {
-  ExternalAPIDataNode() { this instanceof Sink }
-}
+class ExternalApiDataNode extends DataFlow::Node instanceof Sink { }
 
 /** A node representing untrusted data being passed to an external API. */
-class UntrustedExternalAPIDataNode extends ExternalAPIDataNode {
-  UntrustedExternalAPIDataNode() { any(Configuration c).hasFlow(_, this) }
+class UntrustedExternalApiDataNode extends ExternalApiDataNode {
+  UntrustedExternalApiDataNode() { any(Configuration c).hasFlow(_, this) }
 
   /** Gets a source of untrusted data which is passed to this external API data node. */
   DataFlow::Node getAnUntrustedSource() { any(Configuration c).hasFlow(result, this) }
@@ -75,6 +69,7 @@ class UntrustedExternalAPIDataNode extends ExternalAPIDataNode {
  * Name of an external API sink, boxed in a newtype for consistency with other languages.
  */
 private newtype TExternalApi =
+  /** An external API sink with `name`. */
   MkExternalApiNode(string name) {
     exists(Sink sink |
       any(Configuration c).hasFlow(_, sink) and
@@ -83,15 +78,15 @@ private newtype TExternalApi =
   }
 
 /** An external API which is used with untrusted data. */
-class ExternalAPIUsedWithUntrustedData extends TExternalApi {
+class ExternalApiUsedWithUntrustedData extends TExternalApi {
   /** Gets a possibly untrusted use of this external API. */
-  UntrustedExternalAPIDataNode getUntrustedDataNode() {
+  UntrustedExternalApiDataNode getUntrustedDataNode() {
     this = MkExternalApiNode(result.(Sink).getApiName())
   }
 
   /** Gets the number of untrusted sources used with this external API. */
   int getNumberOfUntrustedSources() {
-    result = count(getUntrustedDataNode().getAnUntrustedSource())
+    result = count(this.getUntrustedDataNode().getAnUntrustedSource())
   }
 
   /** Gets a textual representation of this element. */

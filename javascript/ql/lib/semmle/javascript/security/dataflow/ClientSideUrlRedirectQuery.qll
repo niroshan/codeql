@@ -8,7 +8,6 @@
  */
 
 import javascript
-import semmle.javascript.security.dataflow.RemoteFlowSources
 import UrlConcatenation
 import ClientSideUrlRedirectCustomizations::ClientSideUrlRedirect
 
@@ -34,9 +33,7 @@ class Configuration extends TaintTracking::Configuration {
     node instanceof Sanitizer
   }
 
-  override predicate isSanitizerEdge(DataFlow::Node source, DataFlow::Node sink) {
-    hostnameSanitizingPrefixEdge(source, sink)
-  }
+  override predicate isSanitizerOut(DataFlow::Node node) { hostnameSanitizingPrefixEdge(node, _) }
 
   override predicate isAdditionalFlowStep(
     DataFlow::Node pred, DataFlow::Node succ, DataFlow::FlowLabel f, DataFlow::FlowLabel g
@@ -49,19 +46,15 @@ class Configuration extends TaintTracking::Configuration {
     f instanceof DocumentUrl and
     g instanceof DocumentUrl and
     succ.(DataFlow::PropRead).accesses(pred, "href")
+    or
+    exists(HtmlSanitizerCall call |
+      pred = call.getInput() and
+      succ = call and
+      f = g
+    )
   }
 
   override predicate isSanitizerGuard(TaintTracking::SanitizerGuardNode guard) {
     guard instanceof HostnameSanitizerGuard
-  }
-}
-
-/**
- * Improper use of openExternal can be leveraged to compromise the user's host.
- * When openExternal is used with untrusted content, it can be leveraged to execute arbitrary commands.
- */
-class ElectronShellOpenExternalSink extends Sink {
-  ElectronShellOpenExternalSink() {
-    this = DataFlow::moduleMember("electron", "shell").getAMemberCall("openExternal").getArgument(0)
   }
 }

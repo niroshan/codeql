@@ -27,12 +27,31 @@ class Configuration extends TaintTracking::Configuration {
     node instanceof Sanitizer
   }
 
-  override predicate isSanitizerEdge(DataFlow::Node source, DataFlow::Node sink) {
-    hostnameSanitizingPrefixEdge(source, sink)
-  }
+  override predicate isSanitizerOut(DataFlow::Node node) { hostnameSanitizingPrefixEdge(node, _) }
 
   override predicate isSanitizerGuard(TaintTracking::SanitizerGuardNode guard) {
     guard instanceof LocalUrlSanitizingGuard or
     guard instanceof HostnameSanitizerGuard
+  }
+
+  override predicate isAdditionalTaintStep(DataFlow::Node pred, DataFlow::Node succ) {
+    exists(HtmlSanitizerCall call |
+      pred = call.getInput() and
+      succ = call
+    )
+  }
+}
+
+/**
+ * A call to a function called `isLocalUrl` or similar, which is
+ * considered to sanitize a variable for purposes of URL redirection.
+ */
+class LocalUrlSanitizingGuard extends TaintTracking::SanitizerGuardNode, DataFlow::CallNode {
+  LocalUrlSanitizingGuard() { this.getCalleeName().regexpMatch("(?i)(is_?)?local_?url") }
+
+  override predicate sanitizes(boolean outcome, Expr e) {
+    // `isLocalUrl(e)` sanitizes `e` if it evaluates to `true`
+    this.getAnArgument().asExpr() = e and
+    outcome = true
   }
 }

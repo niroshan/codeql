@@ -1,4 +1,4 @@
-
+// semmle-extractor-options: -std=c++11
 class MyValue {
 public:
 	MyValue(int _val) : val(_val) {};
@@ -163,4 +163,28 @@ int g19(int x)
 	}
 
 	return x; // GOOD
+}
+
+[[noreturn]] void g20();
+
+int g21() {
+    g20(); // GOOD
+}
+
+class Aborting {
+public:
+	[[noreturn]]
+	~Aborting();
+
+	void a() {};
+};
+
+int g22() {
+	Aborting x;
+	
+	x.a(); // GOOD
+}
+
+int g23() {
+	Aborting().a(); // GOOD [FALSE POSITIVE]
 }

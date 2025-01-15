@@ -45,7 +45,10 @@ private module Cached {
       CopyStep(PropertyName prop) or
       LoadStoreStep(PropertyName fromProp, PropertyName toProp) {
         SharedTypeTrackingStep::loadStoreStep(_, _, fromProp, toProp)
-      }
+        or
+        summarizedLoadStoreStep(_, _, fromProp, toProp)
+      } or
+      WithoutPropStep(PropertySet props) { SharedTypeTrackingStep::withoutPropStep(_, _, props) }
   }
 
   /**
@@ -54,6 +57,38 @@ private module Cached {
   cached
   predicate step(DataFlow::SourceNode pred, DataFlow::SourceNode succ, StepSummary summary) {
     exists(DataFlow::Node mid | pred.flowsTo(mid) | StepSummary::smallstep(mid, succ, summary))
+  }
+
+  pragma[nomagic]
+  private DataFlow::Node getAGlobalStepPredecessor(string global) {
+    result = AccessPath::getAnAssignmentTo(global) and
+    AccessPath::isAssignedInUniqueFile(global)
+  }
+
+  pragma[nomagic]
+  private DataFlow::Node getAGlobalStepSuccessor(string global) {
+    result = AccessPath::getAReferenceTo(global) and
+    AccessPath::isAssignedInUniqueFile(global)
+  }
+
+  bindingset[fun]
+  pragma[inline_late]
+  private DataFlow::PropRead getStoredPropRead(DataFlow::FunctionNode fun, string storeProp) {
+    result = fun.getAReturn().getALocalSource().getAPropertySource(storeProp)
+  }
+
+  /**
+   * Holds if `loadProp` of `param` is stored in the `storeProp` property of the return value of `fun`.
+   */
+  pragma[nomagic]
+  private predicate summarizedLoadStoreStep(
+    DataFlow::ParameterNode param, DataFlow::FunctionNode fun, string loadProp, string storeProp
+  ) {
+    exists(DataFlow::PropRead read |
+      read = getStoredPropRead(fun, storeProp) and
+      read.getBase().getALocalSource() = param and
+      read.getPropertyName() = loadProp
+    )
   }
 
   /**
@@ -81,6 +116,10 @@ private module Cached {
     DataFlow::localFieldStep(pred, succ) and
     summary = LevelStep()
     or
+    // Implied flow of host object into 'this' of a method
+    CallGraph::impliedReceiverStep(pred, succ) and
+    summary = CallStep()
+    or
     exists(string prop |
       basicStoreStep(pred, succ, prop) and
       summary = StoreStep(prop)
@@ -98,6 +137,11 @@ private module Cached {
       summary = CopyStep(prop)
     )
     or
+    exists(PropertySet props |
+      SharedTypeTrackingStep::withoutPropStep(pred, succ, props) and
+      summary = WithoutPropStep(props)
+    )
+    or
     exists(string fromProp, string toProp |
       SharedTypeTrackingStep::loadStoreStep(pred, succ, fromProp, toProp) and
       summary = LoadStoreStep(fromProp, toProp)
@@ -106,20 +150,10 @@ private module Cached {
     SharedTypeTrackingStep::step(pred, succ) and
     summary = LevelStep()
     or
-    // Store to global access path
-    exists(string name |
-      pred = AccessPath::getAnAssignmentTo(name) and
-      AccessPath::isAssignedInUniqueFile(name) and
-      succ = DataFlow::globalAccessPathRootPseudoNode() and
-      summary = StoreStep(name)
-    )
-    or
-    // Load from global access path
-    exists(string name |
-      succ = AccessPath::getAReferenceTo(name) and
-      AccessPath::isAssignedInUniqueFile(name) and
-      pred = DataFlow::globalAccessPathRootPseudoNode() and
-      summary = LoadStep(name)
+    summary = LevelStep() and
+    exists(string global |
+      pred = getAGlobalStepPredecessor(global) and
+      succ = getAGlobalStepSuccessor(global)
     )
     or
     // Store to non-global access path
@@ -144,6 +178,14 @@ private module Cached {
         exists(string prop |
           param.getAPropertyRead(prop).flowsTo(fun.getAReturn()) and
           summary = LoadStep(prop)
+          or
+          fun.getAReturn().getALocalSource().getAPropertySource(prop) = param and
+          summary = StoreStep(prop)
+        )
+        or
+        exists(string loadProp, string storeProp |
+          summarizedLoadStoreStep(param, fun, loadProp, storeProp) and
+          summary = LoadStoreStep(loadProp, storeProp)
         )
       ) and
       if param = fun.getAParameter()
@@ -191,6 +233,8 @@ class StepSummary extends TStepSummary {
     exists(string prop | this = LoadStep(prop) | result = "load " + prop)
     or
     exists(string prop | this = CopyStep(prop) | result = "copy " + prop)
+    or
+    exists(string prop | this = WithoutPropStep(prop) | result = "without " + prop)
     or
     exists(string fromProp, string toProp | this = LoadStoreStep(fromProp, toProp) |
       result = "load " + fromProp + " and store to " + toProp

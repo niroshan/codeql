@@ -8,51 +8,52 @@ import semmle.code.cpp.models.interfaces.SideEffect
  * guaranteed to be side-effect free.
  */
 private class PureStrFunction extends AliasFunction, ArrayFunction, TaintFunction,
-  SideEffectFunction {
+  SideEffectFunction
+{
   PureStrFunction() {
-    hasGlobalOrStdOrBslName([
+    this.hasGlobalOrStdOrBslName([
         atoi(), "strcasestr", "strchnul", "strchr", "strchrnul", "strstr", "strpbrk", "strrchr",
-        "strspn", strtol(), strrev(), strcmp(), strlwr(), strupr()
+        "strspn", strrev(), strcmp(), strlwr(), strupr()
       ])
   }
 
   override predicate hasArrayInput(int bufParam) {
-    getParameter(bufParam).getUnspecifiedType() instanceof PointerType
+    this.getParameter(bufParam).getUnspecifiedType() instanceof PointerType
   }
 
   override predicate hasArrayWithNullTerminator(int bufParam) {
-    getParameter(bufParam).getUnspecifiedType() instanceof PointerType
+    this.getParameter(bufParam).getUnspecifiedType() instanceof PointerType
   }
 
   override predicate hasTaintFlow(FunctionInput input, FunctionOutput output) {
     exists(ParameterIndex i |
       (
         input.isParameter(i) and
-        exists(getParameter(i))
+        exists(this.getParameter(i))
         or
         input.isParameterDeref(i) and
-        getParameter(i).getUnspecifiedType() instanceof PointerType
+        this.getParameter(i).getUnspecifiedType() instanceof PointerType
       ) and
       // Functions that end with _l also take a locale argument (always as the last argument),
       // and we don't want taint from those arguments.
-      (not this.getName().matches("%\\_l") or exists(getParameter(i + 1)))
+      (not this.getName().matches("%\\_l") or exists(this.getParameter(i + 1)))
     ) and
     (
       output.isReturnValueDeref() and
-      getUnspecifiedType() instanceof PointerType
+      this.getUnspecifiedType() instanceof PointerType
       or
       output.isReturnValue()
     )
   }
 
   override predicate parameterNeverEscapes(int i) {
-    getParameter(i).getUnspecifiedType() instanceof PointerType and
-    not parameterEscapesOnlyViaReturn(i)
+    this.getParameter(i).getUnspecifiedType() instanceof PointerType and
+    not this.parameterEscapesOnlyViaReturn(i)
   }
 
   override predicate parameterEscapesOnlyViaReturn(int i) {
     i = 0 and
-    getUnspecifiedType() instanceof PointerType
+    this.getUnspecifiedType() instanceof PointerType
   }
 
   override predicate parameterIsAlwaysReturned(int i) { none() }
@@ -62,14 +63,12 @@ private class PureStrFunction extends AliasFunction, ArrayFunction, TaintFunctio
   override predicate hasOnlySpecificWriteSideEffects() { any() }
 
   override predicate hasSpecificReadSideEffect(ParameterIndex i, boolean buffer) {
-    getParameter(i).getUnspecifiedType() instanceof PointerType and
+    this.getParameter(i).getUnspecifiedType() instanceof PointerType and
     buffer = true
   }
 }
 
 private string atoi() { result = ["atof", "atoi", "atol", "atoll"] }
-
-private string strtol() { result = ["strtod", "strtof", "strtol", "strtoll", "strtoq", "strtoul"] }
 
 private string strlwr() {
   result = ["_strlwr", "_wcslwr", "_mbslwr", "_strlwr_l", "_wcslwr_l", "_mbslwr_l"]
@@ -97,21 +96,21 @@ private string strcmp() {
  */
 private class StrLenFunction extends AliasFunction, ArrayFunction, SideEffectFunction {
   StrLenFunction() {
-    hasGlobalOrStdOrBslName(["strlen", "strnlen", "wcslen"])
+    this.hasGlobalOrStdOrBslName(["strlen", "strnlen", "wcslen"])
     or
-    hasGlobalName(["_mbslen", "_mbslen_l", "_mbstrlen", "_mbstrlen_l"])
+    this.hasGlobalName(["_mbslen", "_mbslen_l", "_mbstrlen", "_mbstrlen_l"])
   }
 
   override predicate hasArrayInput(int bufParam) {
-    getParameter(bufParam).getUnspecifiedType() instanceof PointerType
+    this.getParameter(bufParam).getUnspecifiedType() instanceof PointerType
   }
 
   override predicate hasArrayWithNullTerminator(int bufParam) {
-    getParameter(bufParam).getUnspecifiedType() instanceof PointerType
+    this.getParameter(bufParam).getUnspecifiedType() instanceof PointerType
   }
 
   override predicate parameterNeverEscapes(int i) {
-    getParameter(i).getUnspecifiedType() instanceof PointerType
+    this.getParameter(i).getUnspecifiedType() instanceof PointerType
   }
 
   override predicate parameterEscapesOnlyViaReturn(int i) { none() }
@@ -123,7 +122,7 @@ private class StrLenFunction extends AliasFunction, ArrayFunction, SideEffectFun
   override predicate hasOnlySpecificWriteSideEffects() { any() }
 
   override predicate hasSpecificReadSideEffect(ParameterIndex i, boolean buffer) {
-    getParameter(i).getUnspecifiedType() instanceof PointerType and
+    this.getParameter(i).getUnspecifiedType() instanceof PointerType and
     buffer = true
   }
 }
@@ -133,12 +132,12 @@ private class StrLenFunction extends AliasFunction, ArrayFunction, SideEffectFun
  * side-effect free. Excludes functions modeled by `PureStrFunction` and `PureMemFunction`.
  */
 private class PureFunction extends TaintFunction, SideEffectFunction {
-  PureFunction() { hasGlobalOrStdOrBslName(["abs", "labs"]) }
+  PureFunction() { this.hasGlobalOrStdOrBslName(["abs", "labs"]) }
 
   override predicate hasTaintFlow(FunctionInput input, FunctionOutput output) {
     exists(ParameterIndex i |
       input.isParameter(i) and
-      exists(getParameter(i))
+      exists(this.getParameter(i))
     ) and
     output.isReturnValue()
   }
@@ -153,46 +152,47 @@ private class PureFunction extends TaintFunction, SideEffectFunction {
  * evaluation is guaranteed to be side-effect free.
  */
 private class PureMemFunction extends AliasFunction, ArrayFunction, TaintFunction,
-  SideEffectFunction {
+  SideEffectFunction
+{
   PureMemFunction() {
-    hasGlobalOrStdOrBslName([
+    this.hasGlobalOrStdOrBslName([
         "memchr", "__builtin_memchr", "memrchr", "rawmemchr", "memcmp", "__builtin_memcmp", "memmem"
       ]) or
     this.hasGlobalName("memfrob")
   }
 
   override predicate hasArrayInput(int bufParam) {
-    getParameter(bufParam).getUnspecifiedType() instanceof PointerType
+    this.getParameter(bufParam).getUnspecifiedType() instanceof PointerType
   }
 
   override predicate hasTaintFlow(FunctionInput input, FunctionOutput output) {
     exists(ParameterIndex i |
       (
         input.isParameter(i) and
-        exists(getParameter(i))
+        exists(this.getParameter(i))
         or
         input.isParameterDeref(i) and
-        getParameter(i).getUnspecifiedType() instanceof PointerType
+        this.getParameter(i).getUnspecifiedType() instanceof PointerType
       ) and
       // `memfrob` should not have taint from the size argument.
       (not this.hasGlobalName("memfrob") or i = 0)
     ) and
     (
       output.isReturnValueDeref() and
-      getUnspecifiedType() instanceof PointerType
+      this.getUnspecifiedType() instanceof PointerType
       or
       output.isReturnValue()
     )
   }
 
   override predicate parameterNeverEscapes(int i) {
-    getParameter(i).getUnspecifiedType() instanceof PointerType and
-    not parameterEscapesOnlyViaReturn(i)
+    this.getParameter(i).getUnspecifiedType() instanceof PointerType and
+    not this.parameterEscapesOnlyViaReturn(i)
   }
 
   override predicate parameterEscapesOnlyViaReturn(int i) {
     i = 0 and
-    getUnspecifiedType() instanceof PointerType
+    this.getUnspecifiedType() instanceof PointerType
   }
 
   override predicate parameterIsAlwaysReturned(int i) { none() }
@@ -202,7 +202,7 @@ private class PureMemFunction extends AliasFunction, ArrayFunction, TaintFunctio
   override predicate hasOnlySpecificWriteSideEffects() { any() }
 
   override predicate hasSpecificReadSideEffect(ParameterIndex i, boolean buffer) {
-    getParameter(i).getUnspecifiedType() instanceof PointerType and
+    this.getParameter(i).getUnspecifiedType() instanceof PointerType and
     buffer = true
   }
 }

@@ -24,4 +24,16 @@ class Configuration extends TaintTracking::Configuration {
     super.isSanitizer(node) or
     node instanceof Sanitizer
   }
+
+  override predicate isAdditionalTaintStep(DataFlow::Node pred, DataFlow::Node succ) {
+    exists(LdapJS::TaintPreservingLdapFilterStep filter |
+      pred = filter.getInput() and
+      succ = filter.getOutput()
+    )
+    or
+    exists(HtmlSanitizerCall call |
+      pred = call.getInput() and
+      succ = call
+    )
+  }
 }

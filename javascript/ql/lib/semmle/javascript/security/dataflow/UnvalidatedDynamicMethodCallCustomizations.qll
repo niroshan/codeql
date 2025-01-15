@@ -36,7 +36,22 @@ module UnvalidatedDynamicMethodCall {
    * A sanitizer for unvalidated dynamic method calls.
    */
   abstract class Sanitizer extends DataFlow::Node {
-    abstract predicate sanitizes(DataFlow::Node source, DataFlow::Node sink, DataFlow::FlowLabel lbl);
+    /**
+     * Gets the flow label blocked by this sanitizer.
+     */
+    DataFlow::FlowLabel getFlowLabel() { result.isTaint() }
+
+    /**
+     * DEPRECATED. Use sanitizer nodes instead.
+     *
+     * This predicate no longer has any effect. The `this` value of `Sanitizer` is instead
+     * treated as a sanitizing node, that is, flow in and out of that node is prohibited.
+     */
+    deprecated predicate sanitizes(
+      DataFlow::Node source, DataFlow::Node sink, DataFlow::FlowLabel lbl
+    ) {
+      none()
+    }
   }
 
   /**
@@ -56,11 +71,14 @@ module UnvalidatedDynamicMethodCall {
   }
 
   /**
-   * A source of remote user input, considered as a source for unvalidated dynamic method calls.
+   * DEPRECATED: Use `ActiveThreatModelSource` from Concepts instead!
    */
-  class RemoteFlowSourceAsSource extends Source {
-    RemoteFlowSourceAsSource() { this instanceof RemoteFlowSource }
-  }
+  deprecated class RemoteFlowSourceAsSource = ActiveThreatModelSourceAsSource;
+
+  /**
+   * An active threat-model source, considered as a flow source.
+   */
+  private class ActiveThreatModelSourceAsSource extends Source, ActiveThreatModelSource { }
 
   /**
    * The page URL considered as a flow source for unvalidated dynamic method calls.
@@ -73,12 +91,12 @@ module UnvalidatedDynamicMethodCall {
    * A function invocation of an unsafe function, as a sink for remote unvalidated dynamic method calls.
    */
   class CalleeAsSink extends Sink {
-    InvokeExpr invk;
-
     CalleeAsSink() {
-      this = invk.getCallee().flow() and
-      // don't flag invocations inside a try-catch
-      not invk.getASuccessor() instanceof CatchClause
+      exists(InvokeExpr invk |
+        this = invk.getCallee().flow() and
+        // don't flag invocations inside a try-catch
+        not invk.getASuccessor() instanceof CatchClause
+      )
     }
 
     override DataFlow::FlowLabel getFlowLabel() {
@@ -107,5 +125,15 @@ module UnvalidatedDynamicMethodCall {
       e = operand and
       label instanceof MaybeNonFunction
     }
+  }
+
+  /** A guard that checks whether `x` is a number. */
+  class NumberGuard extends TaintTracking::SanitizerGuardNode instanceof DataFlow::CallNode {
+    Expr x;
+    boolean polarity;
+
+    NumberGuard() { TaintTracking::isNumberGuard(this, x, polarity) }
+
+    override predicate sanitizes(boolean outcome, Expr e) { e = x and outcome = polarity }
   }
 }

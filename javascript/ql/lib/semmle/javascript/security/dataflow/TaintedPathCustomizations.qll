@@ -106,7 +106,7 @@ module TaintedPath {
       /** Holds if this path may contain `../` components. */
       predicate canContainDotDotSlash() {
         // Absolute normalized path is the only combination that cannot contain `../`.
-        not (isNormalized() and isAbsolute())
+        not (this.isNormalized() and this.isAbsolute())
       }
     }
 
@@ -133,7 +133,7 @@ module TaintedPath {
 
     NormalizingPathCall() {
       this = NodeJSLib::Path::moduleMember("normalize").getACall() and
-      input = getArgument(0) and
+      input = this.getArgument(0) and
       output = this
     }
 
@@ -157,16 +157,16 @@ module TaintedPath {
 
     ResolvingPathCall() {
       this = NodeJSLib::Path::moduleMember("resolve").getACall() and
-      input = getAnArgument() and
+      input = this.getAnArgument() and
       output = this
       or
       this = NodeJSLib::FS::moduleMember("realpathSync").getACall() and
-      input = getArgument(0) and
+      input = this.getArgument(0) and
       output = this
       or
       this = NodeJSLib::FS::moduleMember("realpath").getACall() and
-      input = getArgument(0) and
-      output = getCallback(1).getParameter(1)
+      input = this.getArgument(0) and
+      output = this.getCallback(1).getParameter(1)
     }
 
     /**
@@ -189,7 +189,7 @@ module TaintedPath {
 
     NormalizingRelativePathCall() {
       this = NodeJSLib::Path::moduleMember("relative").getACall() and
-      input = getAnArgument() and
+      input = this.getAnArgument() and
       output = this
     }
 
@@ -214,17 +214,17 @@ module TaintedPath {
     PreservingPathCall() {
       this =
         NodeJSLib::Path::moduleMember(["dirname", "toNamespacedPath", "parse", "format"]).getACall() and
-      input = getAnArgument() and
+      input = this.getAnArgument() and
       output = this
       or
       // non-global replace or replace of something other than /\.\./g, /[/]/g, or /[\.]/g.
       this instanceof StringReplaceCall and
-      input = getReceiver() and
+      input = this.getReceiver() and
       output = this and
-      not exists(RegExpLiteral literal, RegExpTerm term |
-        this.(StringReplaceCall).getRegExp().asExpr() = literal and
-        this.(StringReplaceCall).isGlobal() and
-        literal.getRoot() = term
+      not exists(DataFlow::RegExpCreationNode regexp, RegExpTerm term |
+        this.(StringReplaceCall).getRegExp() = regexp and
+        this.(StringReplaceCall).maybeGlobal() and
+        regexp.getRoot() = term
       |
         term.getAMatchedString() = "/" or
         term.getAMatchedString() = "." or
@@ -252,10 +252,10 @@ module TaintedPath {
     DataFlow::Node output;
 
     DotDotSlashPrefixRemovingReplace() {
-      input = getReceiver() and
+      input = this.getReceiver() and
       output = this and
       exists(RegExpLiteral literal, RegExpTerm term |
-        getRegExp().asExpr() = literal and
+        this.getRegExp().asExpr() = literal and
         (term instanceof RegExpStar or term instanceof RegExpPlus) and
         term.getChild(0) = getADotDotSlashMatcher()
       |
@@ -302,12 +302,12 @@ module TaintedPath {
     DataFlow::Node output;
 
     DotRemovingReplaceCall() {
-      input = getReceiver() and
+      input = this.getReceiver() and
       output = this and
-      isGlobal() and
-      exists(RegExpLiteral literal, RegExpTerm term |
-        getRegExp().asExpr() = literal and
-        literal.getRoot() = term and
+      this.isGlobal() and
+      exists(DataFlow::RegExpCreationNode regexp, RegExpTerm term |
+        this.getRegExp() = regexp and
+        regexp.getRoot() = term and
         not term.getAMatchedString() = "/"
       |
         term.getAMatchedString() = "." or
@@ -345,21 +345,16 @@ module TaintedPath {
    *
    * This is relevant for paths that are known to be normalized.
    */
-  class StartsWithDotDotSanitizer extends BarrierGuardNode {
-    StringOps::StartsWith startsWith;
-
-    StartsWithDotDotSanitizer() {
-      this = startsWith and
-      isDotDotSlashPrefix(startsWith.getSubstring())
-    }
+  class StartsWithDotDotSanitizer extends BarrierGuardNode instanceof StringOps::StartsWith {
+    StartsWithDotDotSanitizer() { isDotDotSlashPrefix(super.getSubstring()) }
 
     override predicate blocks(boolean outcome, Expr e, DataFlow::FlowLabel label) {
       // Sanitize in the false case for:
       //   .startsWith(".")
       //   .startsWith("..")
       //   .startsWith("../")
-      outcome = startsWith.getPolarity().booleanNot() and
-      e = startsWith.getBaseString().asExpr() and
+      outcome = super.getPolarity().booleanNot() and
+      e = super.getBaseString().asExpr() and
       exists(Label::PosixPath posixPath | posixPath = label |
         posixPath.isNormalized() and
         posixPath.isRelative()
@@ -445,17 +440,25 @@ module TaintedPath {
   /**
    * An expression of form `x.includes("..")` or similar.
    */
-  class ContainsDotDotSanitizer extends BarrierGuardNode {
-    StringOps::Includes contains;
-
-    ContainsDotDotSanitizer() {
-      this = contains and
-      isDotDotSlashPrefix(contains.getSubstring())
-    }
+  class ContainsDotDotSanitizer extends BarrierGuardNode instanceof StringOps::Includes {
+    ContainsDotDotSanitizer() { isDotDotSlashPrefix(super.getSubstring()) }
 
     override predicate blocks(boolean outcome, Expr e, DataFlow::FlowLabel label) {
-      e = contains.getBaseString().asExpr() and
-      outcome = contains.getPolarity().booleanNot() and
+      e = super.getBaseString().asExpr() and
+      outcome = super.getPolarity().booleanNot() and
+      label.(Label::PosixPath).canContainDotDotSlash() // can still be bypassed by normalized absolute path
+    }
+  }
+
+  /**
+   * An expression of form `x.matches(/\.\./)` or similar.
+   */
+  class ContainsDotDotRegExpSanitizer extends BarrierGuardNode instanceof StringOps::RegExpTest {
+    ContainsDotDotRegExpSanitizer() { super.getRegExp().getAMatchedString() = [".", "..", "../"] }
+
+    override predicate blocks(boolean outcome, Expr e, DataFlow::FlowLabel label) {
+      e = super.getStringOperand().asExpr() and
+      outcome = super.getPolarity().booleanNot() and
       label.(Label::PosixPath).canContainDotDotSlash() // can still be bypassed by normalized absolute path
     }
   }
@@ -505,12 +508,28 @@ module TaintedPath {
 
     override predicate blocks(boolean outcome, Expr e) {
       member = "relative" and
-      e = pathCall.getArgument(1).asExpr() and
+      e = this.maybeGetPathSuffix(pathCall.getArgument(1)).asExpr() and
       outcome = startsWith.getPolarity().booleanNot()
       or
       not member = "relative" and
-      e = pathCall.getArgument(0).asExpr() and
+      e = this.maybeGetPathSuffix(pathCall.getArgument(0)).asExpr() and
       outcome = startsWith.getPolarity()
+    }
+
+    /**
+     * Gets the last argument to the given `path.join()` call,
+     * or the node itself if it is not a join call.
+     * Is used to get the suffix of the path.
+     */
+    bindingset[e]
+    private DataFlow::Node maybeGetPathSuffix(DataFlow::Node e) {
+      exists(DataFlow::CallNode call |
+        call = NodeJSLib::Path::moduleMember("join").getACall() and e = call
+      |
+        result = call.getLastArgument()
+      )
+      or
+      result = e
     }
   }
 
@@ -553,16 +572,15 @@ module TaintedPath {
   }
 
   /**
-   * A source of remote user input, considered as a flow source for
-   * tainted-path vulnerabilities.
+   * DEPRECATED: Use `ActiveThreatModelSource` from Concepts instead!
    */
-  class RemoteFlowSourceAsSource extends Source {
-    RemoteFlowSourceAsSource() {
-      exists(RemoteFlowSource src |
-        this = src and
-        not src instanceof ClientSideRemoteFlowSource
-      )
-    }
+  deprecated class RemoteFlowSourceAsSource = ActiveThreatModelSourceAsSource;
+
+  /**
+   * An active threat-model source, considered as a flow source.
+   */
+  private class ActiveThreatModelSourceAsSource extends Source instanceof ActiveThreatModelSource {
+    ActiveThreatModelSourceAsSource() { not this instanceof ClientSideRemoteFlowSource }
   }
 
   /**
@@ -623,21 +641,22 @@ module TaintedPath {
   /**
    * A path argument to the Express `res.render` method.
    */
-  class ExpressRenderSink extends Sink, DataFlow::ValueNode {
+  class ExpressRenderSink extends Sink {
     ExpressRenderSink() {
-      exists(MethodCallExpr mce |
+      exists(DataFlow::MethodCallNode mce |
         Express::isResponse(mce.getReceiver()) and
         mce.getMethodName() = "render" and
-        astNode = mce.getArgument(0)
+        this = mce.getArgument(0)
       )
     }
   }
 
   /**
-   * A `templateUrl` member of an AngularJS directive.
+   * DEPRECATED. This is no longer seen as a path-injection sink. It is tentatively handled
+   * by the client-side URL redirection query for now.
    */
-  class AngularJSTemplateUrlSink extends Sink, DataFlow::ValueNode {
-    AngularJSTemplateUrlSink() { this = any(AngularJS::CustomDirective d).getMember("templateUrl") }
+  deprecated class AngularJSTemplateUrlSink extends DataFlow::ValueNode instanceof Sink {
+    AngularJSTemplateUrlSink() { none() }
   }
 
   /**
@@ -657,7 +676,7 @@ module TaintedPath {
             .getMember(["pdf", "screenshot"])
             .getParameter(0)
             .getMember("path")
-            .getARhs()
+            .asSink()
     }
   }
 
@@ -678,7 +697,7 @@ module TaintedPath {
             .getACall()
             .getParameter(1)
             .getMember("config")
-            .getARhs()
+            .asSink()
     }
   }
 
@@ -692,7 +711,7 @@ module TaintedPath {
             .getMember(["readPackageAsync", "readPackageSync"])
             .getParameter(0)
             .getMember("cwd")
-            .getARhs()
+            .asSink()
     }
   }
 
@@ -702,8 +721,8 @@ module TaintedPath {
   private class ShellCwdSink extends TaintedPath::Sink {
     ShellCwdSink() {
       exists(SystemCommandExecution sys, API::Node opts |
-        opts.getARhs() = sys.getOptionsArg() and // assuming that an API::Node exists here.
-        this = opts.getMember("cwd").getARhs()
+        opts.asSink() = sys.getOptionsArg() and // assuming that an API::Node exists here.
+        this = opts.getMember("cwd").asSink()
       )
     }
   }
@@ -751,13 +770,11 @@ module TaintedPath {
       exists(mcn.getAnArgument().asExpr().getIntValue())
       or
       exists(string argumentlessMethodName |
-        argumentlessMethodName = "toLocaleLowerCase" or
-        argumentlessMethodName = "toLocaleUpperCase" or
-        argumentlessMethodName = "toLowerCase" or
-        argumentlessMethodName = "toUpperCase" or
-        argumentlessMethodName = "trim" or
-        argumentlessMethodName = "trimLeft" or
-        argumentlessMethodName = "trimRight"
+        argumentlessMethodName =
+          [
+            "toLocaleLowerCase", "toLocaleUpperCase", "toLowerCase", "toUpperCase", "trim",
+            "trimLeft", "trimRight"
+          ]
       |
         name = argumentlessMethodName
       )
@@ -824,11 +841,33 @@ module TaintedPath {
       dst = call and
       srclabel = dstlabel
     )
+    or
+    exists(HtmlSanitizerCall call |
+      src = call.getInput() and
+      dst = call and
+      srclabel = dstlabel
+    )
+    or
+    exists(DataFlow::CallNode join |
+      // path.join() with spread argument
+      join = NodeJSLib::Path::moduleMember("join").getACall() and
+      src = join.getASpreadArgument() and
+      dst = join and
+      (
+        srclabel.(Label::PosixPath).canContainDotDotSlash()
+        or
+        srclabel instanceof Label::SplitPath
+      ) and
+      dstlabel.(Label::PosixPath).isNormalized() and
+      if isRelative(join.getArgument(0).getStringValue())
+      then dstlabel.(Label::PosixPath).isRelative()
+      else dstlabel.(Label::PosixPath).isAbsolute()
+    )
   }
 
   /**
    * Holds if we should include a step from `src -> dst` with labels `srclabel -> dstlabel`, and the
-   * standard taint step `src -> dst` should be suppresesd.
+   * standard taint step `src -> dst` should be suppressed.
    */
   private predicate isPosixPathStep(
     DataFlow::Node src, DataFlow::Node dst, Label::PosixPath srclabel, Label::PosixPath dstlabel
@@ -923,5 +962,9 @@ module TaintedPath {
         else dstlabel.isAbsolute()
       )
     )
+  }
+
+  private class SinkFromModel extends Sink {
+    SinkFromModel() { this = ModelOutput::getASinkNode("path-injection").asSink() }
   }
 }

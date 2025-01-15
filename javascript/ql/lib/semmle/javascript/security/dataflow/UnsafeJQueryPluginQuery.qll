@@ -4,7 +4,7 @@
  */
 
 import javascript
-import semmle.javascript.security.dataflow.Xss
+import semmle.javascript.security.dataflow.DomBasedXssCustomizations
 import UnsafeJQueryPluginCustomizations::UnsafeJQueryPlugin
 
 /**
@@ -31,22 +31,20 @@ class Configuration extends TaintTracking::Configuration {
     aliasPropertyPresenceStep(src, sink)
   }
 
-  override predicate isSanitizerEdge(DataFlow::Node pred, DataFlow::Node succ) {
+  override predicate isSanitizerOut(DataFlow::Node node) {
     // prefixing prevents forced html/css confusion:
     // prefixing through concatenation:
-    StringConcatenation::taintStep(pred, succ, _, any(int i | i >= 1))
+    StringConcatenation::taintStep(node, _, _, any(int i | i >= 1))
     or
     // prefixing through a poor-mans templating system:
-    exists(StringReplaceCall replace |
-      replace = succ and
-      pred = replace.getRawReplacement()
-    )
+    node = any(StringReplaceCall call).getRawReplacement()
   }
 
   override predicate isSanitizerGuard(TaintTracking::SanitizerGuardNode node) {
     super.isSanitizerGuard(node) or
     node instanceof IsElementSanitizer or
-    node instanceof PropertyPresenceSanitizer
+    node instanceof PropertyPresenceSanitizer or
+    node instanceof NumberGuard
   }
 }
 

@@ -102,3 +102,24 @@ app.get('/user/:id', function (req, res) {
   res.send(markdownIt.use(require('markdown-it-sanitizer')).render(req.body)); // OK - HTML is sanitized. 
   res.send(markdownIt.use(require('markdown-it-abbr')).use(unknown).render(req.body)); // NOT OK
 });
+
+var Hapi = require('hapi');
+var hapi = new Hapi.Server();
+hapi.route({
+    handler: function (request){
+        return request.query.p; // NOT OK
+    }});
+
+app.get("invalid/keys/:id", async (req, res) => {
+    const { keys: queryKeys } = req.query;
+    const paramKeys = req.params;
+    const keys = queryKeys || paramKeys?.keys;
+
+    const keyArray = typeof keys === 'string' ? [keys] : keys;
+    const invalidKeys = keyArray.filter(key => !whitelist.includes(key));
+
+    if (invalidKeys.length) {
+        res.status(400).send(`${invalidKeys.join(', ')} not in whitelist`);
+        return;
+    }
+});

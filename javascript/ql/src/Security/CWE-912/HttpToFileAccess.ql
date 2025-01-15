@@ -3,7 +3,7 @@
  * @description Writing network data directly to the file system allows arbitrary file upload and might indicate a backdoor.
  * @kind path-problem
  * @problem.severity warning
- * @security-severity 9.8
+ * @security-severity 6.3
  * @precision medium
  * @id js/http-to-file-access
  * @tags security
@@ -17,4 +17,5 @@ import DataFlow::PathGraph
 
 from Configuration cfg, DataFlow::PathNode source, DataFlow::PathNode sink
 where cfg.hasFlowPath(source, sink)
-select sink.getNode(), source, sink, "$@ flows to file system", source.getNode(), "Untrusted data"
+select sink.getNode(), source, sink, "Write to file system depends on $@.", source.getNode(),
+  "Untrusted data"

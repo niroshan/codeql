@@ -30,15 +30,12 @@ module TemplateObjectInjection {
    */
   abstract class Sanitizer extends DataFlow::Node { }
 
-  private class TaintedObjectSourceAsSource extends Source {
-    TaintedObjectSourceAsSource() { this instanceof TaintedObject::Source }
-
+  private class TaintedObjectSourceAsSource extends Source instanceof TaintedObject::Source {
     override DataFlow::FlowLabel getAFlowLabel() { result = TaintedObject::label() }
   }
 
-  private class RemoteFlowSourceAsSource extends Source {
-    RemoteFlowSourceAsSource() { this instanceof RemoteFlowSource }
-
+  /** An active threat-model source, considered as a flow source. */
+  private class ActiveThreatModelSourceAsSource extends Source, ActiveThreatModelSource {
     override DataFlow::FlowLabel getAFlowLabel() { result.isTaint() }
   }
 
@@ -51,7 +48,7 @@ module TemplateObjectInjection {
       exists(
         Express::RouteSetup setup, Express::RouterDefinition router, Express::RouterDefinition top
       |
-        setup.getARouteHandler() = getRouteHandler() and
+        setup.getARouteHandler() = this.getRouteHandler() and
         setup.getRouter() = router and
         top.getASubRouter*() = router and
         usesVulnerableTemplateEngine(top)
@@ -76,8 +73,8 @@ module TemplateObjectInjection {
   predicate usesVulnerableTemplateEngine(Express::RouterDefinition router) {
     // option 1: `app.set("view engine", "theEngine")`.
     // Express will load the engine automatically.
-    exists(MethodCallExpr call |
-      router.flowsTo(call.getReceiver()) and
+    exists(DataFlow::MethodCallNode call |
+      router.ref().getAMethodCall() = call and
       call.getMethodName() = "set" and
       call.getArgument(0).getStringValue() = "view engine" and
       call.getArgument(1).getStringValue() = getAVulnerableTemplateEngine()
@@ -91,11 +88,11 @@ module TemplateObjectInjection {
       DataFlow::MethodCallNode viewEngineCall
     |
       // `app.engine("name", engine)
-      router.flowsTo(registerCall.getReceiver().asExpr()) and
+      router.ref().getAMethodCall() = registerCall and
       registerCall.getMethodName() = ["engine", "register"] and
       engine = registerCall.getArgument(1).getALocalSource() and
       // app.set("view engine", "name")
-      router.flowsTo(viewEngineCall.getReceiver().asExpr()) and
+      router.ref().getAMethodCall() = viewEngineCall and
       viewEngineCall.getMethodName() = "set" and
       viewEngineCall.getArgument(0).getStringValue() = "view engine" and
       // The name set by the `app.engine("name")` call matches `app.set("view engine", "name")`.
