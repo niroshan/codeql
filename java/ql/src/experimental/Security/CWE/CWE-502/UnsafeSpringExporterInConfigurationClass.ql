@@ -8,6 +8,7 @@
  * @precision high
  * @id java/unsafe-deserialization-spring-exporter-in-configuration-class
  * @tags security
+ *       experimental
  *       external/cwe/cwe-502
  */
 
@@ -42,7 +43,7 @@ private class UnsafeBeanInitMethod extends Method {
     exists(Annotation a | this.getAnAnnotation() = a |
       a.getType().hasQualifiedName("org.springframework.context.annotation", "Bean") and
       if a.getValue("name") instanceof StringLiteral
-      then identifier = a.getValue("name").(StringLiteral).getRepresentedString()
+      then identifier = a.getValue("name").(StringLiteral).getValue()
       else identifier = this.getName()
     )
   }
@@ -55,4 +56,4 @@ private class UnsafeBeanInitMethod extends Method {
 
 from UnsafeBeanInitMethod method
 select method,
-  "Unsafe deserialization in a Spring exporter bean '" + method.getBeanIdentifier() + "'"
+  "Unsafe deserialization in a Spring exporter bean '" + method.getBeanIdentifier() + "'."

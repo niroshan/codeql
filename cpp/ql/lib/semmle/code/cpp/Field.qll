@@ -4,7 +4,6 @@
 
 import semmle.code.cpp.Variable
 import semmle.code.cpp.Enum
-import semmle.code.cpp.exprs.Access
 
 /**
  * A C structure member or C++ non-static member variable. For example the
@@ -32,7 +31,7 @@ class Field extends MemberVariable {
   int getByteOffset() { fieldoffsets(underlyingElement(this), result, _) }
 
   /**
-   * Gets the byte offset within `mostDerivedClass` of each occurence of this
+   * Gets the byte offset within `mostDerivedClass` of each occurrence of this
    * field within `mostDerivedClass` itself or a base class subobject of
    * `mostDerivedClass`.
    * Note that for fields of virtual base classes, and non-virtual base classes
@@ -40,7 +39,8 @@ class Field extends MemberVariable {
    * complete most-derived object.
    */
   int getAByteOffsetIn(Class mostDerivedClass) {
-    result = mostDerivedClass.getABaseClassByteOffset(getDeclaringType()) + getByteOffset()
+    result =
+      mostDerivedClass.getABaseClassByteOffset(this.getDeclaringType()) + this.getByteOffset()
   }
 
   /**
@@ -117,10 +117,10 @@ class BitField extends Field {
   int getBitOffset() { fieldoffsets(underlyingElement(this), _, result) }
 
   /** Holds if this bitfield is anonymous. */
-  predicate isAnonymous() { hasName("(unnamed bitfield)") }
+  predicate isAnonymous() { this.hasName("(unnamed bitfield)") }
 
   override predicate isInitializable() {
     // Anonymous bitfields are not initializable.
-    not isAnonymous()
+    not this.isAnonymous()
   }
 }

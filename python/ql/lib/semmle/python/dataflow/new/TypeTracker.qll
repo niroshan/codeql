@@ -1,19 +1,24 @@
 /**
+ * DEPRECATED: Use `semmle.python.dataflow.new.TypeTracking` instead.
+ *
  * This file acts as a wrapper for `internal.TypeTracker`, exposing some of the functionality with
  * names that are more appropriate for Python.
  */
 
 private import python
 private import internal.TypeTracker as Internal
+private import internal.TypeTrackerSpecific as InternalSpecific
 
-/** Any string that may appear as the name of an attribute or access path. */
-class AttributeName = Internal::ContentName;
+/** A string that may appear as the name of an attribute or access path. */
+deprecated class AttributeName = InternalSpecific::TypeTrackerContent;
 
-/** Either an attribute name, or the empty string (representing no attribute). */
-class OptionalAttributeName = Internal::OptionalContentName;
+/** An attribute name, or the empty string (representing no attribute). */
+deprecated class OptionalAttributeName = InternalSpecific::OptionalTypeTrackerContent;
 
 /**
- * Summary of the steps needed to track a value to a given dataflow node.
+ * DEPRECATED: Use `semmle.python.dataflow.new.TypeTracking` instead.
+ *
+ * The summary of the steps needed to track a value to a given dataflow node.
  *
  * This can be used to track objects that implement a certain API in order to
  * recognize calls to that API. Note that type-tracking does not by itself provide a
@@ -39,7 +44,7 @@ class OptionalAttributeName = Internal::OptionalContentName;
  * `t = t2.step(myType(t2), result)`. If you additionally want to track individual
  * intra-procedural steps, use `t = t2.smallstep(myCallback(t2), result)`.
  */
-class TypeTracker extends Internal::TypeTracker {
+deprecated class TypeTracker extends Internal::TypeTracker {
   /**
    * Holds if this is the starting point of type tracking, and the value starts in the attribute named `attrName`.
    * The type tracking only ends after the attribute has been loaded.
@@ -54,12 +59,12 @@ class TypeTracker extends Internal::TypeTracker {
   string getAttr() { result = this.getContent() }
 }
 
-module TypeTracker = Internal::TypeTracker;
+deprecated module TypeTracker = Internal::TypeTracker;
 
-class StepSummary = Internal::StepSummary;
+deprecated class StepSummary = Internal::StepSummary;
 
-module StepSummary = Internal::StepSummary;
+deprecated module StepSummary = Internal::StepSummary;
 
-class TypeBackTracker = Internal::TypeBackTracker;
+deprecated class TypeBackTracker = Internal::TypeBackTracker;
 
-module TypeBackTracker = Internal::TypeBackTracker;
+deprecated module TypeBackTracker = Internal::TypeBackTracker;
